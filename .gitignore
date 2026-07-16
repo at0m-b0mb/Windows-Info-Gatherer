@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# WinRecon generated reports
+WinRecon_*.html
+WinRecon_*.json
+WinRecon_*.txt
+/tmp/wr_*.
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+*.swp

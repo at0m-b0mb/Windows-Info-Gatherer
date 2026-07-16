@@ -1,0 +1,6 @@
+# WinRecon runtime dependencies
+# The GUI is built on PyQt6; report export and collectors use only the stdlib.
+PyQt6>=6.5
+
+# Optional: only needed to regenerate the README banner (tools/make_banner.py)
+# Pillow>=10.0
