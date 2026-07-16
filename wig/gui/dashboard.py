@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (
 
 from ..model import Category, Severity
 from . import theme
-from .widgets import Card, StatTile
+from .widgets import Card, StatTile, risk_summary_card
 
 
 def _find(categories, key):
@@ -90,6 +90,13 @@ def build_dashboard(categories: List[Category], host: str, demo: bool) -> QWidge
     for i, t in enumerate(tiles):
         grid.addWidget(t, i // 4, i % 4)
     outer.addLayout(grid)
+
+    # Risk posture strip (severity breakdown)
+    if findings:
+        counts = {}
+        for f in findings:
+            counts[f.severity] = counts.get(f.severity, 0) + 1
+        outer.addWidget(risk_summary_card(counts, len(findings)))
 
     # Two-column: top findings + quick facts
     cols = QHBoxLayout()

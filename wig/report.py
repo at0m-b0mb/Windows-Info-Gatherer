@@ -99,6 +99,49 @@ _SEV_COLOR = {
     Severity.INFO: "#8b98a9",
     Severity.GOOD: "#28e0c8",
 }
+_GOOD = "#39d98a"
+_ACCENT = "#28e0c8"
+_HIGH = "#ff8a3d"
+_MED = "#ffd23d"
+_RISKY_PORTS = {"21", "23", "135", "137", "138", "139", "445",
+                "1433", "3306", "3389", "5432", "5985", "5986"}
+
+
+def _cell_color(section_title: str, header: str, value: str):
+    """Highlight colour for a security-meaningful cell (mirrors the GUI)."""
+    t, h, vl = (section_title or "").lower(), (header or "").lower(), \
+        (value or "").strip().lower()
+    if not vl:
+        return None
+    if "posture" in t:
+        if "tamper" in h:
+            return _GOOD if vl in ("on", "true", "enabled") else _MED
+        if "firewall" in h:
+            return _MED if "off" in vl else _GOOD
+        if "bitlocker" in h:
+            return _GOOD if vl in ("on", "enabled") else _HIGH
+        if h == "rdp":
+            return _MED if "enabled" in vl else _GOOD
+        if h == "smbv1":
+            return _HIGH if "enabled" in vl else _GOOD
+        if vl in ("on", "enabled", "running", "true"):
+            return _GOOD
+        if vl in ("off", "disabled", "stopped", "not encrypted", "false"):
+            return _MED
+        return None
+    if "local accounts" in t and h == "admin" and vl == "yes":
+        return _HIGH
+    if "listening ports" in t:
+        if h == "state" and vl == "listening":
+            return _ACCENT
+        if h == "local address" and value.rsplit(":", 1)[-1] in _RISKY_PORTS:
+            return _HIGH
+    if t == "services" and h == "state" and vl == "running":
+        return _GOOD
+    if "wi-fi" in t and "key" in h and vl not in ("(open)",
+                                                  "(not stored / no admin)"):
+        return _ACCENT
+    return None
 
 
 def to_html(categories: List[Category], demo: bool) -> str:
@@ -121,7 +164,10 @@ def to_html(categories: List[Category], demo: bool) -> str:
             if s.kind == "keyvalue":
                 body.append('<table class="kv">')
                 for k, v in s.rows:
-                    body.append(f'<tr><th>{e(k)}</th><td>{e(v)}</td></tr>')
+                    col = _cell_color(s.title, k, v)
+                    style = f' style="color:{col};font-weight:600"' if col else ''
+                    body.append(f'<tr><th>{e(k)}</th>'
+                                f'<td{style}>{e(v)}</td></tr>')
                 body.append('</table>')
             elif s.kind == "table":
                 body.append('<div class="scroll"><table class="grid"><thead><tr>')
@@ -129,8 +175,13 @@ def to_html(categories: List[Category], demo: bool) -> str:
                     body.append(f'<th>{e(h)}</th>')
                 body.append('</tr></thead><tbody>')
                 for row in s.table_rows:
-                    body.append('<tr>' + ''.join(
-                        f'<td>{e(c)}</td>' for c in row) + '</tr>')
+                    cells = []
+                    for i, c in enumerate(row):
+                        hd = s.headers[i] if i < len(s.headers) else ""
+                        col = _cell_color(s.title, hd, c)
+                        style = f' style="color:{col}"' if col else ''
+                        cells.append(f'<td{style}>{e(c)}</td>')
+                    body.append('<tr>' + ''.join(cells) + '</tr>')
                 body.append('</tbody></table></div>')
             elif s.kind == "findings":
                 for f in s.findings:

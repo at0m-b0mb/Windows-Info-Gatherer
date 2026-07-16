@@ -22,6 +22,84 @@ SEVERITY = {
     "Info": "#8b98a9",
     "Good": "#28e0c8",
 }
+GOOD = "#39d98a"
+
+# Ports that materially widen the remote attack surface.
+RISKY_PORTS = {"21", "23", "135", "137", "138", "139", "445",
+               "1433", "3306", "3389", "5432", "5985", "5986"}
+
+
+def semantic_color(section_title: str, header: str, value: str):
+    """Return a highlight colour for a security-meaningful cell, else ``None``.
+
+    Lives in the view layer so collectors stay presentation-agnostic. Matching
+    is scoped by section + column so the same word ("Enabled", "Disabled")
+    reads correctly in different contexts.
+    """
+    t = (section_title or "").lower()
+    h = (header or "").lower()
+    v = (value or "").strip()
+    vl = v.lower()
+    if not vl:
+        return None
+
+    if "posture" in t:
+        if h in ("uac (enablelua)", "windows defender", "real-time protection",
+                 "cloud protection"):
+            return GOOD if vl in ("enabled", "on", "running", "true") \
+                else SEVERITY["High"]
+        if h == "tamper protection":
+            return GOOD if vl in ("on", "true", "enabled") else SEVERITY["Medium"]
+        if "firewall" in h:
+            return SEVERITY["Medium"] if "off" in vl else GOOD
+        if "bitlocker" in h:
+            return GOOD if vl in ("on", "enabled") else SEVERITY["High"]
+        if h == "rdp":
+            return SEVERITY["Medium"] if "enabled" in vl else GOOD
+        if h == "smbv1":
+            return SEVERITY["High"] if "enabled" in vl else GOOD
+        if vl in ("on", "enabled", "running"):
+            return GOOD
+        if vl in ("off", "disabled", "stopped", "not encrypted"):
+            return SEVERITY["Medium"]
+        return None
+
+    if "local accounts" in t:
+        if h == "admin" and vl == "yes":
+            return SEVERITY["High"]
+        if h == "enabled" and vl == "no":
+            return MUTED
+        return None
+
+    if "listening ports" in t:
+        if h == "state" and vl == "listening":
+            return ACCENT
+        if h == "local address":
+            port = v.rsplit(":", 1)[-1]
+            if port in RISKY_PORTS:
+                return SEVERITY["High"]
+        return None
+
+    if t == "services" and h == "state":
+        return GOOD if vl == "running" else MUTED
+
+    if "wi-fi" in t and "key" in h:
+        if v and vl not in ("(open)", "(not stored / no admin)"):
+            return ACCENT
+        return None
+
+    return None
+
+
+def risk_level(n_critical: int, n_high: int, n_medium: int):
+    """Map finding counts to a (label, colour) risk badge."""
+    if n_critical:
+        return "CRITICAL", SEVERITY["Critical"]
+    if n_high:
+        return "ELEVATED", SEVERITY["High"]
+    if n_medium:
+        return "MODERATE", SEVERITY["Medium"]
+    return "LOW", GOOD
 
 
 def stylesheet() -> str:
@@ -77,6 +155,12 @@ def stylesheet() -> str:
     #Card {{ background: {CARD}; border: 1px solid {BORDER}; border-radius: 12px; }}
     #CardTitle {{ color: {ACCENT2}; font-size: 11px; font-weight: 700;
                   letter-spacing: 1px; }}
+    #CountBadge {{ color: {MUTED}; background: {CARD_HI}; border: 1px solid {BORDER};
+                   border-radius: 8px; padding: 0 8px; font-size: 10px;
+                   font-weight: 700; }}
+    #RiskBadge {{ font-size: 12px; font-weight: 800; border-radius: 9px;
+                  padding: 3px 12px; letter-spacing: .5px; }}
+    #LegendItem {{ color: {MUTED}; font-size: 11px; }}
     #CardNote {{ color: {MUTED}; font-size: 11px; font-style: italic; }}
     #KvKey {{ color: {MUTED}; }}
     #KvVal {{ color: {TEXT}; font-family: ui-monospace, Menlo, Consolas, monospace; }}

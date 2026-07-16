@@ -20,7 +20,7 @@ from ..collectors.base import is_demo
 from ..model import Category
 from . import theme
 from .dashboard import build_dashboard
-from .widgets import Card, NavButton
+from .widgets import Card, NavButton, risk_summary_card
 
 
 class CollectWorker(QThread):
@@ -246,6 +246,17 @@ class MainWindow(QMainWindow):
         v.setContentsMargins(28, 22, 28, 28)
         v.setSpacing(16)
         cards = []
+
+        # Security Audit leads with a risk-posture summary.
+        if cat.key == "audit":
+            findings = next((s.findings for s in cat.sections
+                             if s.kind == "findings"), [])
+            if findings:
+                counts = {}
+                for f in findings:
+                    counts[f.severity] = counts.get(f.severity, 0) + 1
+                v.addWidget(risk_summary_card(counts, len(findings)))
+
         for section in cat.sections:
             if section.is_empty:
                 continue

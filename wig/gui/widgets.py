@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtGui import QColor, QPainter, QPainterPath
 from PyQt6.QtWidgets import (
     QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QPushButton,
     QSizePolicy, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
@@ -64,9 +65,21 @@ class Card(QFrame):
         self.lay.setContentsMargins(18, 16, 18, 16)
         self.lay.setSpacing(10)
 
+        # Title row: label + optional count badge.
+        head = QHBoxLayout()
+        head.setSpacing(9)
         title = QLabel(section.title.upper())
         title.setObjectName("CardTitle")
-        self.lay.addWidget(title)
+        head.addWidget(title)
+        count = (len(section.table_rows) if section.kind == "table"
+                 else len(section.findings) if section.kind == "findings"
+                 else 0)
+        if count:
+            badge = QLabel(str(count))
+            badge.setObjectName("CountBadge")
+            head.addWidget(badge)
+        head.addStretch()
+        self.lay.addLayout(head)
 
         if section.kind == "keyvalue":
             self._build_keyvalue(section)
@@ -97,6 +110,9 @@ class Card(QFrame):
             val.setWordWrap(True)
             val.setTextInteractionFlags(
                 Qt.TextInteractionFlag.TextSelectableByMouse)
+            color = theme.semantic_color(section.title, k, v)
+            if color:
+                val.setStyleSheet(f"color:{color}; font-weight:600;")
             grid.addWidget(key, r, 0)
             grid.addWidget(val, r, 1)
             self._rows_widgets.append(((key, val), f"{k} {v}".lower()))
@@ -116,6 +132,10 @@ class Card(QFrame):
         for r, row in enumerate(section.table_rows):
             for c, cell in enumerate(row):
                 item = QTableWidgetItem(cell)
+                head = section.headers[c] if c < len(section.headers) else ""
+                color = theme.semantic_color(section.title, head, cell)
+                if color:
+                    item.setForeground(QColor(color))
                 table.setItem(r, c, item)
         header = table.horizontalHeader()
         for c in range(len(section.headers)):
@@ -211,3 +231,86 @@ class Card(QFrame):
                 for w in widgets:
                     w.setVisible(match or text in self.section.title.lower())
         return any_match
+
+
+class SeverityBar(QWidget):
+    """A rounded, stacked proportional bar of finding severities."""
+
+    def __init__(self, segments):
+        super().__init__()
+        # segments: list of (label, color, count)
+        self.segments = [s for s in segments if s[2] > 0]
+        self.setFixedHeight(12)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def paintEvent(self, _event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
+        r = h / 2
+        track = QPainterPath()
+        track.addRoundedRect(QRectF(0, 0, w, h), r, r)
+        p.fillPath(track, QColor(theme.BORDER))
+        total = sum(c for _, _, c in self.segments)
+        if not total:
+            return
+        p.setClipPath(track)
+        x = 0.0
+        gap = 2.0
+        for _label, color, count in self.segments:
+            seg = w * count / total
+            p.fillRect(QRectF(x, 0, max(seg - gap, 1), h), QColor(color))
+            x += seg
+
+
+def risk_summary_card(counts: dict, total: int) -> QFrame:
+    """Card with a risk-level badge, a severity bar and a legend."""
+    from ..model import Severity
+
+    n_c = counts.get(Severity.CRITICAL, 0)
+    n_h = counts.get(Severity.HIGH, 0)
+    n_m = counts.get(Severity.MEDIUM, 0)
+    label, color = theme.risk_level(n_c, n_h, n_m)
+
+    card = QFrame()
+    card.setObjectName("Card")
+    lay = QVBoxLayout(card)
+    lay.setContentsMargins(18, 16, 18, 16)
+    lay.setSpacing(12)
+
+    head = QHBoxLayout()
+    head.setSpacing(10)
+    title = QLabel("RISK POSTURE")
+    title.setObjectName("CardTitle")
+    head.addWidget(title)
+    head.addStretch()
+    badge = QLabel(label + " RISK")
+    badge.setObjectName("RiskBadge")
+    badge.setStyleSheet(
+        f"background:{color}22; color:{color}; border:1px solid {color}66;")
+    head.addWidget(badge)
+    lay.addLayout(head)
+
+    order = [
+        ("Critical", theme.SEVERITY["Critical"], n_c),
+        ("High", theme.SEVERITY["High"], n_h),
+        ("Medium", theme.SEVERITY["Medium"], n_m),
+        ("Low", theme.SEVERITY["Low"], counts.get(Severity.LOW, 0)),
+        ("Good", theme.GOOD, counts.get(Severity.GOOD, 0)
+         + counts.get(Severity.INFO, 0)),
+    ]
+    lay.addWidget(SeverityBar(order))
+
+    legend = QHBoxLayout()
+    legend.setSpacing(16)
+    for name, col, cnt in order:
+        item = QLabel(f"<span style='color:{col}'>●</span> "
+                      f"<b style='color:{theme.TEXT}'>{cnt}</b> {name}")
+        item.setObjectName("LegendItem")
+        legend.addWidget(item)
+    legend.addStretch()
+    total_lbl = QLabel(f"{total} findings")
+    total_lbl.setObjectName("LegendItem")
+    legend.addWidget(total_lbl)
+    lay.addLayout(legend)
+    return card

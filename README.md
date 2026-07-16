@@ -53,7 +53,8 @@ defender (or an attacker already on the box) would look at first.
 
 Plus:
 
-- 📊 **Dashboard** with live stat tiles and the top security findings at a glance.
+- 📊 **Dashboard** with live stat tiles, a **risk-posture severity bar**, and the top findings at a glance.
+- 🎨 **Color-coded risk highlighting** — admin accounts, open/risky ports, recovered Wi-Fi keys and weak settings stand out instantly (in the app *and* the exported HTML).
 - 🔎 **Per-page live search** to filter any table or field instantly.
 - 🧵 **Threaded scanning** so the UI never freezes while collecting.
 - ⤓ **One-click export** to a self-contained **HTML** report, **JSON**, or **TXT**.
